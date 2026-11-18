@@ -9,6 +9,7 @@ Useful when the `.lyx` is edited from outside LyX: by a script, a collaborator's
 - Atomic PDF replacement: viewers never see a half-written file, and a failed build keeps the last good PDF.
 - Debounced: waits until the file stops changing before building.
 - Also watches the `.bib` files next to your document.
+- Follows `\include` / `\input` (multi-file theses and books): every `.lyx` pulled in by the main document, recursively, is watched too, and newly added includes are picked up while running.
 
 ## Usage
 
@@ -21,7 +22,7 @@ python3 lyx_live.py paper.lyx -f pdf4        # xelatex (pdf5 = lualatex)
 python3 lyx_live.py paper.lyx -w refs/extra.bib
 ```
 
-Options: `-o/--output`, `-w/--watch` (repeatable), `-f/--format`, `-i/--interval`, `--settle`, `--viewer`, `--no-open`, `--lyx`.
+Options: `-o/--output`, `-w/--watch` (repeatable, for extra files beyond the automatic ones), `-f/--format`, `-i/--interval`, `--settle`, `--viewer`, `--no-open`, `--lyx`.
 
 ## Viewer tips
 
