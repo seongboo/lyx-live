@@ -8,6 +8,7 @@ in your viewer refreshes by itself.  Standard library only.
 """
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -31,6 +32,40 @@ def find_lyx(explicit):
         if os.path.exists(cand):
             return cand
     sys.exit("error: LyX not found. Put it on PATH or pass --lyx /path/to/lyx")
+
+
+_INCLUDE_RE = re.compile(
+    r'^\\begin_inset CommandInset (?:include|input)\s*\n'
+    r'(?:[^\n]*\n)*?filename "([^"]+)"', re.M)
+
+
+def find_includes(src, seen=None):
+    """Recursively collect .lyx files pulled in via \\include / \\input.
+
+    LyX stores these as `CommandInset include` blocks with a `filename`
+    relative to the including document.  Non-.lyx files (e.g. .tex) are
+    skipped; missing files are ignored.
+    """
+    seen = set() if seen is None else seen
+    try:
+        text = src.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    out = []
+    for name in _INCLUDE_RE.findall(text):
+        child = (src.parent / name).resolve()
+        if child.suffix == ".lyx" and child.is_file() and child not in seen:
+            seen.add(child)
+            out.append(child)
+            out.extend(find_includes(child, seen))
+    return out
+
+
+def watch_list(src, extra):
+    """Main file + included chapters + extras + .bib files next to the main file."""
+    files = [src] + find_includes(src, {src}) + list(extra)
+    files += sorted(src.parent.glob("*.bib"))
+    return list(dict.fromkeys(files))  # dedupe, keep order
 
 
 def stamp(paths):
@@ -122,8 +157,9 @@ def main():
     else:
         pdf = Path(tempfile.mkdtemp(prefix="lyx-live-")) / (src.stem + ".pdf")
 
-    watched = [src] + [p.resolve() for p in args.watch] + sorted(src.parent.glob("*.bib"))
-    print(f"watching: {', '.join(p.name for p in watched)}")
+    extra = [p.resolve() for p in args.watch]
+    watched = watch_list(src, extra)
+    print(f"watching: {len(watched)} files ({', '.join(p.name for p in watched)})")
     print(f"pdf:      {pdf}")
     print("Ctrl-C to stop.\n")
 
@@ -135,19 +171,20 @@ def main():
     try:
         while True:
             time.sleep(args.interval)
+            watched = watch_list(src, extra)  # pick up newly added includes
             cur = stamp(watched)
             if cur == last:
                 continue
             # debounce: editors/scripts often write in several steps
             while True:
                 time.sleep(args.settle)
-                nxt = stamp(watched)
+                nxt = stamp(watch_list(src, extra))
                 if nxt == cur:
                     break
                 cur = nxt
             last = cur
             build(lyx, src, pdf, args.format)
-            last = stamp(watched)
+            last = stamp(watch_list(src, extra))
     except KeyboardInterrupt:
         print("\nstopped.")
 
