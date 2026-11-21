@@ -163,11 +163,11 @@ def main():
     print(f"pdf:      {pdf}")
     print("Ctrl-C to stop.\n")
 
+    last = stamp(watched)  # snapshot BEFORE building so edits made during a build are not missed
     build(lyx, src, pdf, args.format)
     if pdf.exists() and not args.no_open:
         open_viewer(pdf, args.viewer)
 
-    last = stamp(watched)
     try:
         while True:
             time.sleep(args.interval)
@@ -182,9 +182,8 @@ def main():
                 if nxt == cur:
                     break
                 cur = nxt
-            last = cur
+            last = cur  # edits made while building change the stamp again and trigger another build
             build(lyx, src, pdf, args.format)
-            last = stamp(watch_list(src, extra))
     except KeyboardInterrupt:
         print("\nstopped.")
 
